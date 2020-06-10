@@ -1,0 +1,116 @@
+-----------------------------------------------------------
+Setear variables para creacion:
+
+# Set an admin login and password for your database
+export ADMINLOGIN='[ServerAdmin]'
+export PASSWORD='[password]'
+# Set the logical SQL server name. We'll add a random string as it needs to be globally unique.
+export SERVERNAME=server$RANDOM
+export RESOURCEGROUP=learn-eeceb63b-c735-40dc-821e-fd38d23bd35b
+# Set the location, we'll pull the location from our resource group.
+export LOCATION=$(az group show --name $RESOURCEGROUP | jq -r '.location')
+
+------------------------------------------------------------
+Crear servidor:
+
+az sql server create \
+    --name $SERVERNAME \
+    --resource-group $RESOURCEGROUP \
+    --location $LOCATION \
+    --admin-user $ADMINLOGIN \
+    --admin-password "$PASSWORD"
+
+-------------------------------------------------------------
+Crear base de datos azure sql:
+
+az sql db create --resource-group $RESOURCEGROUP \
+    --server $SERVERNAME \
+    --name marketplaceDb \
+    --sample-name AdventureWorksLT \
+    --service-objective Basic
+
+------------------------------------------------------------
+Saca la connection string:
+
+az sql db show-connection-string --client sqlcmd --name marketplaceDb --server $SERVERNAME | jq -r
+
+Devuelve:
+
+sqlcmd -S tcp:server24354.database.windows.net,1433 -d marketplaceDb -U <username> -P <password> -N -l 30
+
+--------------------------------------------------------------
+Crear maquina vitual:
+
+az vm create \
+  --resource-group $RESOURCEGROUP \
+  --name appServer \
+  --image UbuntuLTS \
+  --size Standard_DS2_v2 \
+  --generate-ssh-keys
+
+Devuelve:
+
+{
+  "fqdns": "",
+  "id": "/subscriptions/nnnnnnnn-nnnn-nnnn-nnnn-nnnnnnnnnnnn/resourceGroups/learn-nnnnnnnn-nnnn-nnnn-nnnn-nnnnnnnnnnnn/providers/Microsoft.Compute/virtualMachines/appServer",
+  "location": "westus",
+  "macAddress": "nn-nn-nn-nn-nn-nn",
+  "powerState": "VM running",
+  "privateIpAddress": "nn.nn.nn.nn",
+  "publicIpAddress": "nnn.nnn.nnn.nnn",
+  "resourceGroup": "learn-nnnnnnnn-nnnn-nnnn-nnnn-nnnnnnnnnnnn",
+  "zones": ""
+}
+
+publicIpAddress
+ex: 52.160.93.196
+
+conectarse con: 
+
+ssh nnn.nnn.nnn.nnn
+
+-------------------------------------------------------------------
+Instalacion de mssql-tool en la vm linux pos conexion:
+
+echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
+echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+source ~/.bashrc
+curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+curl https://packages.microsoft.com/config/ubuntu/16.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+sudo apt-get update
+sudo ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
+
+
+
+sqlcmd -S tcp:serverNNNN.database.windows.net,1433 -d marketplaceDb -U '[username]' -P '[password]' -N -l 30
+
+EXECUTE sp_set_database_firewall_rule N'My Firewall Rule', '40.112.128.214', '40.112.128.214'
+
+EXECUTE sp_set_database_firewall_rule N'Allow appServer database level rule', '[From IP Address]', '[To IP Address]';
+GO
+
+sqlcmd -S tcp:serverNNNN.database.windows.net,1433 -d marketplaceDb -U '[username]' -P '[password]' -N -l 30
+
+EXECUTE sp_delete_database_firewall_rule N'Allow appServer database level rule';
+GO
+
+sqlcmd -S tcp:serverNNNN.database.windows.net,1433 -d marketplaceDb -U '[username]' -P '[password]' -N -l 30
+
+CREATE USER ApplicationUser WITH PASSWORD = 'YourStrongPassword1';
+GO
+
+ALTER ROLE db_datareader ADD MEMBER ApplicationUser;
+ALTER ROLE db_datawriter ADD MEMBER ApplicationUser;
+GO
+
+DENY SELECT ON SalesLT.Address TO ApplicationUser;
+GO
+
+SELECT FirstName, LastName, EmailAddress, Phone FROM SalesLT.Customer;
+GO
+
+SELECT * FROM SalesLT.Address;
+GO
+
+
+
